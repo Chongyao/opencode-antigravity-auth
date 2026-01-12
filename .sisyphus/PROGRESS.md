@@ -7,7 +7,7 @@
 | 阶段 | 状态 | 描述 |
 |------|------|------|
 | P0 | ✅ 完成 | 开发环境搭建 |
-| P1 | ⬜ 待开始 | 时间解析模块 |
+| P1 | ✅ 完成 | 时间解析模块 |
 | P2 | ⬜ 待开始 | 智能限流模块 |
 | P3 | ⬜ 待开始 | 配置 Schema 更新 |
 | P4 | ⬜ 待开始 | 账号与存储层更新 |
@@ -85,26 +85,26 @@ MOUNT_ARGS="$MOUNT_ARGS -v $OPENCODE_CONFIG_DIR:/root/.config/opencode"
 
 ---
 
-## P1: 时间解析模块
+## P1: 时间解析模块 ✅
 
-- [ ] 1.1 创建 `src/plugin/rate-limit.ts` 骨架
-  - [ ] 文件创建
-  - [ ] 类型定义 (RateLimitReason)
-  - [ ] 函数签名导出
-- [ ] 1.2 实现 `parseDurationString()`
-  - [ ] 基本格式 (h/m/s/ms)
-  - [ ] 组合格式 (2h1m1s)
-  - [ ] 小数秒 (1.5s)
-  - [ ] 边界处理 (null/empty/invalid)
-- [ ] 1.3 实现 `parseIsoResetTime()`
-  - [ ] ISO 8601 标准格式
-  - [ ] 带毫秒格式
-  - [ ] 时区偏移格式
-  - [ ] 边界处理
-- [ ] 1.4 单元测试
-  - [ ] parseDurationString 10+ 用例
-  - [ ] parseIsoResetTime 5+ 用例
-  - [ ] 全部通过
+- [x] 1.1 创建 `src/plugin/rate-limit.ts` 骨架
+  - [x] 文件创建
+  - [x] 类型定义 (RateLimitReason)
+  - [x] 函数签名导出
+- [x] 1.2 实现 `parseDurationString()`
+  - [x] 基本格式 (h/m/s/ms)
+  - [x] 组合格式 (2h1m1s)
+  - [x] 小数秒 (1.5s)
+  - [x] 边界处理 (null/empty/invalid)
+- [x] 1.3 实现 `parseIsoResetTime()`
+  - [x] ISO 8601 标准格式
+  - [x] 带毫秒格式
+  - [x] 时区偏移格式
+  - [x] 边界处理
+- [x] 1.4 单元测试
+  - [x] parseDurationString 17 用例
+  - [x] parseIsoResetTime 10 用例
+  - [x] 全部通过 (27 tests)
 - [ ] **P1 Checkpoint**: 代码提交
 
 ---
