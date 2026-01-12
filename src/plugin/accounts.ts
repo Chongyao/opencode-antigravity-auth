@@ -2,9 +2,11 @@ import { formatRefreshParts, parseRefreshParts } from "./auth";
 import { loadAccounts, saveAccounts, type AccountStorageV3, type RateLimitStateV3, type ModelFamily, type HeaderStyle, type CooldownReason } from "./storage";
 import type { OAuthAuthDetails, RefreshParts } from "./types";
 import type { AccountSelectionStrategy } from "./config/schema";
+import type { RateLimitReason } from "./rate-limit";
 
 export type { ModelFamily, HeaderStyle, CooldownReason } from "./storage";
 export type { AccountSelectionStrategy } from "./config/schema";
+export type { RateLimitReason } from "./rate-limit";
 
 export type BaseQuotaKey = "claude" | "gemini-antigravity" | "gemini-cli";
 export type QuotaKey = BaseQuotaKey | `${BaseQuotaKey}:${string}`;
@@ -23,6 +25,7 @@ export interface ManagedAccount {
   cooldownReason?: CooldownReason;
   touchedForQuota: Record<string, number>;
   consecutiveFailures?: number;
+  lastRateLimitReason?: RateLimitReason;
 }
 
 function nowMs(): number {
@@ -348,10 +351,14 @@ export class AccountManager {
     retryAfterMs: number,
     family: ModelFamily,
     headerStyle: HeaderStyle = "antigravity",
-    model?: string | null
+    model?: string | null,
+    reason?: RateLimitReason
   ): void {
     const key = getQuotaKey(family, headerStyle, model);
     account.rateLimitResetTimes[key] = nowMs() + retryAfterMs;
+    if (reason) {
+      account.lastRateLimitReason = reason;
+    }
   }
 
   markAccountCoolingDown(account: ManagedAccount, cooldownMs: number, reason: CooldownReason): void {
@@ -377,6 +384,10 @@ export class AccountManager {
 
   getAccountCooldownReason(account: ManagedAccount): CooldownReason | undefined {
     return this.isAccountCoolingDown(account) ? account.cooldownReason : undefined;
+  }
+
+  getLastRateLimitReason(account: ManagedAccount): RateLimitReason | undefined {
+    return account.lastRateLimitReason;
   }
 
   markTouchedForQuota(account: ManagedAccount, quotaKey: string): void {

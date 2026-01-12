@@ -17,8 +17,9 @@ import { z } from "zod";
  * - `sticky` (default): Use same account until rate-limited. Preserves prompt cache.
  * - `round-robin`: Rotate to next account on every request. Maximum throughput.
  * - `hybrid`: Touch all fresh accounts first to sync reset timers, then sticky.
+ * - `cache-first`: Prefer accounts with prompt cache, use precise quota reset times.
  */
-export const AccountSelectionStrategySchema = z.enum(['sticky', 'round-robin', 'hybrid']);
+export const AccountSelectionStrategySchema = z.enum(['sticky', 'round-robin', 'hybrid', 'cache-first']);
 export type AccountSelectionStrategy = z.infer<typeof AccountSelectionStrategySchema>;
 
 /**
@@ -36,6 +37,12 @@ export const SignatureCacheConfigSchema = z.object({
   
   /** Background write interval in seconds (default: 60) */
   write_interval_seconds: z.number().min(10).max(600).default(60),
+});
+
+export const QuotaWarmingConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  interval_minutes: z.number().min(5).max(120).default(30),
+  probe_before_minutes: z.number().min(1).max(30).default(5),
 });
 
 /**
@@ -270,11 +277,14 @@ export const AntigravityConfigSchema = z.object({
    * Enable automatic plugin updates.
    * @default true
    */
-  auto_update: z.boolean().default(true),
+   auto_update: z.boolean().default(true),
+   
+   quota_warming: QuotaWarmingConfigSchema.optional(),
 });
 
 export type AntigravityConfig = z.infer<typeof AntigravityConfigSchema>;
 export type SignatureCacheConfig = z.infer<typeof SignatureCacheConfigSchema>;
+export type QuotaWarmingConfig = z.infer<typeof QuotaWarmingConfigSchema>;
 
 /**
  * Default configuration values.
@@ -296,13 +306,18 @@ export const DEFAULT_CONFIG: AntigravityConfig = {
   max_rate_limit_wait_seconds: 300,
   quota_fallback: false,
   account_selection_strategy: 'sticky',
-pid_offset_enabled: false,
-   switch_on_first_rate_limit: true,
-   auto_update: true,
+  pid_offset_enabled: false,
+  switch_on_first_rate_limit: true,
+  auto_update: true,
   signature_cache: {
     enabled: true,
     memory_ttl_seconds: 3600,
     disk_ttl_seconds: 172800,
     write_interval_seconds: 60,
+  },
+  quota_warming: {
+    enabled: false,
+    interval_minutes: 30,
+    probe_before_minutes: 5,
   },
 };

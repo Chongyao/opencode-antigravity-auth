@@ -95,13 +95,18 @@ function mergeConfigs(
   return {
     ...base,
     ...override,
-    // Deep merge signature_cache if both exist
     signature_cache: override.signature_cache
       ? {
           ...base.signature_cache,
           ...override.signature_cache,
         }
       : base.signature_cache,
+    quota_warming: override.quota_warming
+      ? {
+          ...base.quota_warming,
+          ...override.quota_warming,
+        }
+      : base.quota_warming,
   };
 }
 
@@ -173,6 +178,16 @@ function applyEnvOverrides(config: AntigravityConfig): AntigravityConfig {
       env.OPENCODE_ANTIGRAVITY_PID_OFFSET_ENABLED === "true"
         ? true
         : config.pid_offset_enabled,
+
+    // OPENCODE_ANTIGRAVITY_QUOTA_WARMING=1
+    quota_warming: env.OPENCODE_ANTIGRAVITY_QUOTA_WARMING === "1" ||
+      env.OPENCODE_ANTIGRAVITY_QUOTA_WARMING === "true"
+        ? {
+            enabled: true,
+            interval_minutes: config.quota_warming?.interval_minutes ?? 30,
+            probe_before_minutes: config.quota_warming?.probe_before_minutes ?? 5,
+          }
+        : config.quota_warming,
   };
 }
 

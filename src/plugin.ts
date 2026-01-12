@@ -33,6 +33,13 @@ import { AntigravityTokenRefreshError, refreshAccessToken } from "./plugin/token
 import { startOAuthListener, type OAuthListener } from "./plugin/server";
 import { clearAccounts, loadAccounts, saveAccounts } from "./plugin/storage";
 import { AccountManager, type ModelFamily } from "./plugin/accounts";
+import {
+  parseDurationString,
+  parseRateLimitReason,
+  getBackoffDelayMs,
+  parseRetryAfterHeader,
+  type RateLimitReason,
+} from "./plugin/rate-limit";
 import { createAutoUpdateCheckerHook } from "./hooks/auto-update-checker";
 import { loadConfig, type AntigravityConfig } from "./plugin/config";
 import { createSessionRecoveryHook, getRecoverySuccessToast } from "./plugin/recovery";
@@ -371,24 +378,12 @@ function retryAfterMsFromResponse(response: Response): number {
   return 60_000;
 }
 
-function parseDurationToMs(duration: string): number | null {
-  const match = duration.match(/^(\d+(?:\.\d+)?)(s|m|h)?$/i);
-  if (!match) return null;
-  const value = parseFloat(match[1]!);
-  const unit = (match[2] || "s").toLowerCase();
-  switch (unit) {
-    case "h": return value * 3600 * 1000;
-    case "m": return value * 60 * 1000;
-    case "s": return value * 1000;
-    default: return value * 1000;
-  }
-}
-
 interface RateLimitBodyInfo {
   retryDelayMs: number | null;
   message?: string;
   quotaResetTime?: string;
   reason?: string;
+  parsedReason?: RateLimitReason;
 }
 
 function extractRateLimitBodyInfo(body: unknown): RateLimitBodyInfo {
@@ -425,7 +420,7 @@ function extractRateLimitBodyInfo(body: unknown): RateLimitBodyInfo {
       if (typeof type === "string" && type.includes("google.rpc.RetryInfo")) {
         const retryDelay = (detail as { retryDelay?: string }).retryDelay;
         if (typeof retryDelay === "string") {
-          const retryDelayMs = parseDurationToMs(retryDelay);
+          const retryDelayMs = parseDurationString(retryDelay);
           if (retryDelayMs !== null) {
             return { retryDelayMs, message, reason };
           }
@@ -440,7 +435,7 @@ function extractRateLimitBodyInfo(body: unknown): RateLimitBodyInfo {
         const quotaResetDelay = metadata.quotaResetDelay;
         const quotaResetTime = metadata.quotaResetTimeStamp;
         if (typeof quotaResetDelay === "string") {
-          const quotaResetDelayMs = parseDurationToMs(quotaResetDelay);
+          const quotaResetDelayMs = parseDurationString(quotaResetDelay);
           if (quotaResetDelayMs !== null) {
             return { retryDelayMs: quotaResetDelayMs, message, quotaResetTime, reason };
           }
@@ -453,7 +448,7 @@ function extractRateLimitBodyInfo(body: unknown): RateLimitBodyInfo {
     const afterMatch = message.match(/reset after\s+([0-9hms.]+)/i);
     const rawDuration = afterMatch?.[1];
     if (rawDuration) {
-      const parsed = parseDurationToMs(rawDuration);
+      const parsed = parseDurationString(rawDuration);
       if (parsed !== null) {
         return { retryDelayMs: parsed, message, reason };
       }
@@ -468,9 +463,11 @@ async function extractRetryInfoFromBody(response: Response): Promise<RateLimitBo
     const text = await response.clone().text();
     try {
       const parsed = JSON.parse(text) as unknown;
-      return extractRateLimitBodyInfo(parsed);
+      const info = extractRateLimitBodyInfo(parsed);
+      info.parsedReason = parseRateLimitReason(text);
+      return info;
     } catch {
-      return { retryDelayMs: null };
+      return { retryDelayMs: null, parsedReason: parseRateLimitReason(text) };
     }
   } catch {
     return { retryDelayMs: null };
@@ -1228,6 +1225,9 @@ export const createAntigravityPlugin = (providerId: string) => async (
                   if (bodyInfo.reason) {
                     pushDebug(`429 reason=${bodyInfo.reason}`);
                   }
+                  if (bodyInfo.parsedReason) {
+                    pushDebug(`429 parsedReason=${bodyInfo.parsedReason}`);
+                  }
 
                    logRateLimitEvent(
                     account.index,
@@ -1264,7 +1264,7 @@ export const createAntigravityPlugin = (providerId: string) => async (
                     await sleep(FIRST_RETRY_DELAY_MS, abortSignal);
                     
                     if (config.switch_on_first_rate_limit && accountCount > 1) {
-                      accountManager.markRateLimited(account, delayMs, family, headerStyle, model);
+                      accountManager.markRateLimited(account, delayMs, family, headerStyle, model, bodyInfo.parsedReason);
                       shouldSwitchAccount = true;
                       break;
                     }
@@ -1272,7 +1272,7 @@ export const createAntigravityPlugin = (providerId: string) => async (
                   }
 
                   // Mark this header style as rate-limited for this account
-                  accountManager.markRateLimited(account, delayMs, family, headerStyle, model);
+                  accountManager.markRateLimited(account, delayMs, family, headerStyle, model, bodyInfo.parsedReason);
 
                   try {
                     await accountManager.saveToDisk();
