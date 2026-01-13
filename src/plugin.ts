@@ -45,6 +45,7 @@ import { loadConfig, type AntigravityConfig } from "./plugin/config";
 import { createSessionRecoveryHook, getRecoverySuccessToast } from "./plugin/recovery";
 import { initDiskSignatureCache } from "./plugin/cache";
 import { createProactiveRefreshQueue, type ProactiveRefreshQueue } from "./plugin/refresh-queue";
+import { QuotaWarmer, type WarmupCallback } from "./plugin/warming";
 import { initLogger, createLogger } from "./plugin/logger";
 import type {
   GetAuth,
@@ -763,6 +764,28 @@ export const createAntigravityPlugin = (providerId: string) => async (
         });
         refreshQueue.setAccountManager(accountManager);
         refreshQueue.start();
+      }
+
+      let quotaWarmer: QuotaWarmer | null = null;
+      if (config.quota_warming?.enabled && accountManager.getAccountCount() > 0) {
+        const warmupCallback: WarmupCallback = async (account, family, quotaKey) => {
+          try {
+            const authRecord = accountManager.toAuthDetails(account);
+            if (accessTokenExpired(authRecord)) {
+              const refreshed = await refreshAccessToken(authRecord, client, providerId);
+              if (refreshed) {
+                accountManager.updateFromAuth(account, refreshed);
+              }
+            }
+            return true;
+          } catch (error) {
+            log.error("Warmup callback failed", { error: String(error), accountIndex: account.index });
+            return false;
+          }
+        };
+        
+        quotaWarmer = new QuotaWarmer(accountManager, config.quota_warming, warmupCallback);
+        quotaWarmer.start();
       }
 
       if (isDebugEnabled()) {
