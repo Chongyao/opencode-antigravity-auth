@@ -461,6 +461,24 @@ When `keep_thinking` is enabled, the plugin caches thinking block signatures to 
 | `quota_fallback` | `false` | **Gemini only.** When rate-limited on primary quota pool (Antigravity or Gemini CLI), automatically try the alternate pool before switching accounts. Effectively doubles retry attempts per account. See [Dual Quota Pools](#dual-quota-pools-gemini-only). |
 | `switch_on_first_rate_limit` | `true` | Switch account immediately on first 429 (after 1s) |
 
+### Quota Warming
+
+> ⚠️ **Experimental Feature** - Proactively refresh tokens for accounts whose quotas are about to reset.
+
+When enabled, the plugin runs a background process that periodically checks all accounts for upcoming quota resets. Before a quota becomes available again, it sends a lightweight warmup request to ensure the account is ready for immediate use.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `quota_warming.enabled` | `false` | Enable proactive quota warming |
+| `quota_warming.interval_minutes` | `30` | How often to check for quotas to warm (5-120 min) |
+| `quota_warming.probe_before_minutes` | `5` | Warm accounts this many minutes before quota resets (1-30 min) |
+
+**How it works:**
+1. Background timer runs every `interval_minutes` (default: 30 min)
+2. Scans all accounts for rate limit reset times
+3. For quotas resetting within `probe_before_minutes` window, sends warmup request
+4. Ensures tokens are refreshed and account is immediately usable when quota resets
+
 ### Account Selection
 
 | Option | Default | Description |
@@ -494,6 +512,7 @@ OPENCODE_ANTIGRAVITY_LOG_DIR=/path                        # log_dir
 OPENCODE_ANTIGRAVITY_KEEP_THINKING=1                      # keep_thinking
 OPENCODE_ANTIGRAVITY_ACCOUNT_SELECTION_STRATEGY=round-robin  # account_selection_strategy
 OPENCODE_ANTIGRAVITY_PID_OFFSET_ENABLED=1                 # pid_offset_enabled
+OPENCODE_ANTIGRAVITY_QUOTA_WARMING=1                      # quota_warming.enabled
 ```
 
 <details>
@@ -521,6 +540,11 @@ OPENCODE_ANTIGRAVITY_PID_OFFSET_ENABLED=1                 # pid_offset_enabled
   "quota_fallback": false,
   "account_selection_strategy": "sticky",
   "pid_offset_enabled": false,
+  "quota_warming": {
+    "enabled": false,
+    "interval_minutes": 30,
+    "probe_before_minutes": 5
+  },
   "signature_cache": {
     "enabled": true,
     "memory_ttl_seconds": 3600,
